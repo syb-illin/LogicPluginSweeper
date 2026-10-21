@@ -1085,6 +1085,17 @@ private struct ProjectAnalysisRow: View {
         }
     }
 
+    private struct ManufacturerPill: Identifiable {
+        let id: String
+        let name: String
+        let pluginNames: [String]
+
+        var detail: String {
+            let plugins = pluginNames.joined(separator: ", ")
+            return plugins.isEmpty ? name : "\(name)\nPlugins : \(plugins)"
+        }
+    }
+
     private var pluginRecords: [UUID: PluginRecord] { Dictionary(uniqueKeysWithValues: plugins.map { ($0.id, $0) }) }
 
     private var pluginPills: [PluginPill] {
@@ -1102,10 +1113,16 @@ private struct ProjectAnalysisRow: View {
         pluginPills.map(\.name)
     }
 
-    private var manufacturers: [String] {
-        Array(Set((analysis?.pluginUsages ?? []).compactMap { usage in
-            usage.manufacturer?.trimmingCharacters(in: .whitespacesAndNewlines)
-        }.filter { !$0.isEmpty })).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    private var manufacturerPills: [ManufacturerPill] {
+        let entries = pluginPills.compactMap { pill -> (String, String)? in
+            guard let manufacturer = pill.manufacturer?.trimmingCharacters(in: .whitespacesAndNewlines), !manufacturer.isEmpty else { return nil }
+            return (manufacturer, pill.name)
+        }
+        return entries.reduce(into: [String: [String]]()) { result, entry in
+            result[entry.0, default: []].append(entry.1)
+        }.map { manufacturer, names in
+            ManufacturerPill(id: manufacturer, name: manufacturer, pluginNames: names.sorted { $0.localizedStandardCompare($1) == .orderedAscending })
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     var body: some View {
@@ -1151,18 +1168,19 @@ private struct ProjectAnalysisRow: View {
             .help(pluginNames.joined(separator: ", "))
 
             HStack(spacing: 4) {
-                if status == .analyzed && !manufacturers.isEmpty {
-                    ForEach(manufacturers.prefix(2), id: \.self) { manufacturer in
-                        Text(manufacturer)
+                if status == .analyzed && !manufacturerPills.isEmpty {
+                    ForEach(manufacturerPills.prefix(2)) { pill in
+                        Text(pill.name)
                             .font(.caption2.weight(.medium))
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 4)
                             .background(.blue.opacity(0.12), in: Capsule())
+                            .help(pill.detail)
                     }
-                    if manufacturers.count > 2 {
-                        Text("+\(manufacturers.count - 2)")
+                    if manufacturerPills.count > 2 {
+                        Text("+\(manufacturerPills.count - 2)")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
@@ -1171,7 +1189,7 @@ private struct ProjectAnalysisRow: View {
                 }
             }
             .frame(width: ProjectAnalysisColumnWidth.manufacturers, alignment: .leading)
-            .help(manufacturers.joined(separator: ", "))
+            .help(manufacturerPills.map(\.detail).joined(separator: "\n\n"))
             Text(L10n.text(status == .analyzing ? "app.projects.card.analyzingRow" : status.key))
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(status.color)
