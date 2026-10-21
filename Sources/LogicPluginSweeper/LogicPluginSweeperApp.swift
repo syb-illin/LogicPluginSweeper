@@ -930,6 +930,12 @@ private struct UsageStatsView: View {
     }
 }
 
+private enum ProjectAnalysisColumnWidth {
+    static let plugins: CGFloat = 360
+    static let manufacturers: CGFloat = 220
+    static let status: CGFloat = 95
+}
+
 private struct ProjectAnalysisCard: View {
     let sourceLabel: String
     let projects: [URL]
@@ -1001,11 +1007,11 @@ private struct ProjectAnalysisCard: View {
                                 Text(L10n.text("app.projects.card.column.project"))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 Text(L10n.text("app.projects.card.column.plugins"))
-                                    .frame(width: 82, alignment: .leading)
+                                    .frame(width: ProjectAnalysisColumnWidth.plugins, alignment: .leading)
                                 Text(L10n.text("app.projects.card.column.manufacturers"))
-                                    .frame(width: 260, alignment: .leading)
+                                    .frame(width: ProjectAnalysisColumnWidth.manufacturers, alignment: .leading)
                                 Text(L10n.text("app.projects.card.column.status"))
-                                    .frame(width: 95, alignment: .trailing)
+                                    .frame(width: ProjectAnalysisColumnWidth.status, alignment: .trailing)
                             }
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
@@ -1057,8 +1063,11 @@ private struct ProjectAnalysisRow: View {
     let analysis: LogicProjectAnalysis?
     let status: ProjectStatus
 
-    private var pluginCount: Int {
-        Set(analysis?.pluginUsages.map(\.pluginID) ?? []).count
+    private var pluginNames: [String] {
+        Array(Set((analysis?.pluginUsages ?? []).map(\.pluginName)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }))
+            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     private var manufacturers: [String] {
@@ -1084,9 +1093,30 @@ private struct ProjectAnalysisRow: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text(status == .analyzed ? String(pluginCount) : "—")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .frame(width: 82, alignment: .leading)
+
+            HStack(spacing: 5) {
+                if status == .analyzed && !pluginNames.isEmpty {
+                    ForEach(pluginNames.prefix(3), id: \.self) { pluginName in
+                        Text(pluginName)
+                            .font(.caption2.weight(.medium))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(.purple.opacity(0.13), in: Capsule())
+                    }
+                    if pluginNames.count > 3 {
+                        Text("+\(pluginNames.count - 3)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("—").foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: ProjectAnalysisColumnWidth.plugins, alignment: .leading)
+            .help(pluginNames.joined(separator: ", "))
+
             HStack(spacing: 4) {
                 if status == .analyzed && !manufacturers.isEmpty {
                     ForEach(manufacturers.prefix(2), id: \.self) { manufacturer in
@@ -1094,9 +1124,8 @@ private struct ProjectAnalysisRow: View {
                             .font(.caption2.weight(.medium))
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .frame(width: 90, alignment: .leading)
                             .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
+                            .padding(.vertical, 4)
                             .background(.blue.opacity(0.12), in: Capsule())
                     }
                     if manufacturers.count > 2 {
@@ -1108,12 +1137,12 @@ private struct ProjectAnalysisRow: View {
                     Text("—").foregroundStyle(.tertiary)
                 }
             }
-            .frame(width: 260, alignment: .leading)
+            .frame(width: ProjectAnalysisColumnWidth.manufacturers, alignment: .leading)
             .help(manufacturers.joined(separator: ", "))
             Text(L10n.text(status == .analyzing ? "app.projects.card.analyzingRow" : status.key))
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(status.color)
-                .frame(width: 95, alignment: .trailing)
+                .frame(width: ProjectAnalysisColumnWidth.status, alignment: .trailing)
         }
         .contentShape(Rectangle())
     }
