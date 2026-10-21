@@ -138,7 +138,8 @@ final class AppModel {
     private var updateTask: Task<Void, Never>?
 
     init() {
-        Task { await TelemetryClient.shared.capture("app_opened", properties: ["app_version": TelemetryValue.string(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")]) }
+        let bundledVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+        Task { await TelemetryClient.shared.capture("app_opened", properties: ["app_version": TelemetryValue.string(bundledVersion)]) }
         let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LogicPluginSweeper/history.sqlite")
         store = try? SQLiteStore(url: url)
         Task { [weak self] in
@@ -165,7 +166,12 @@ final class AppModel {
         isCheckingForUpdates = true
         updateMessage = nil
         let service = releaseService
-        let currentVersion = SemanticVersion(tag: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0") ?? SemanticVersion(tag: "0.1.0")!
+        guard let bundledVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              let currentVersion = SemanticVersion(tag: bundledVersion) else {
+            isCheckingForUpdates = false
+            updateMessage = L10n.text("app.updates.unavailable")
+            return
+        }
         let selectedChannel = channel ?? UpdateChannel(rawValue: UserDefaults.standard.string(forKey: "logicPluginSweeper.updateChannel") ?? "stable") ?? .stable
         updateTask = Task { [weak self] in
             do {

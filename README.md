@@ -38,6 +38,8 @@
 
 Les versions publiées sont disponibles dans la section [Releases](https://github.com/syb-illin/LogicPluginSweeper/releases).
 
+La version publiée est définie une seule fois dans `VERSION`. Le workflow refuse automatiquement un tag qui ne correspond pas à ce fichier ; le badge de release, le nom des archives et la version affichée dans l’application restent ainsi alignés.
+
 Téléchargez l’archive `.zip` ou le `.dmg` correspondant à votre Mac, ouvrez l’application, puis suivez les instructions de macOS si une confirmation de sécurité est demandée.
 
 Le DMG contient aussi **LogicPluginSweeper Uninstaller.app**, un désinstalleur autonome utilisable même si l’application principale ne démarre plus.
