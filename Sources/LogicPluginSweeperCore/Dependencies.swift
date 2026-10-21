@@ -51,7 +51,9 @@ public struct LogicProjectAnalyzer: Sendable {
                     guard let plugin = pluginsByKey[item.pluginKey] else { return nil }
                     return LogicProjectPluginUsage(plugin: plugin, trackName: item.trackName, confidence: item.trackName == nil ? .low : .medium)
                 }
-                for usage in usages { projectURLsByPlugin[usage.pluginID, default: []].append(project) }
+                for usage in usages where !projectURLsByPlugin[usage.pluginID, default: []].contains(project) {
+                    projectURLsByPlugin[usage.pluginID, default: []].append(project)
+                }
                 analyzedProjectCount += 1
                 projectAnalyses.append(LogicProjectAnalysis(projectURL: project, pluginUsages: usages))
                 if let analysis = projectAnalyses.last { onProgress?(projectAnalyses.count, analysis) }
@@ -75,7 +77,9 @@ public struct LogicProjectAnalyzer: Sendable {
                     let normalizedManufacturer = normalized(manufacturer)
                     if normalizedManufacturer.count >= 3 && !content.text.contains(normalizedManufacturer) { continue }
                 }
-                projectURLsByPlugin[plugin.id, default: []].append(project)
+                if !projectURLsByPlugin[plugin.id, default: []].contains(project) {
+                    projectURLsByPlugin[plugin.id, default: []].append(project)
+                }
                 let trackName = nearbyTrackName(for: plugin, in: content.runs, normalizedRuns: normalizedRuns)
                 usages.append(LogicProjectPluginUsage(plugin: plugin, trackName: trackName, confidence: trackName == nil ? .low : .medium))
             }

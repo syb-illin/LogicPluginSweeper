@@ -1612,7 +1612,7 @@ private struct ProjectDetailView: View {
             Text(projectURL.path).font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
             Divider()
             if let analysis, !analysis.pluginUsages.isEmpty {
-                Text(L10n.format("app.project.plugins", analysis.pluginUsages.count)).font(.headline)
+                Text(L10n.format("app.project.plugins", analysis.distinctPluginCount)).font(.headline)
                 List(analysis.pluginUsages) { usage in
                     Button { onSelectPlugin(usage.pluginID) } label: {
                         HStack {

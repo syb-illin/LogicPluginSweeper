@@ -193,6 +193,14 @@ public struct LogicProjectAnalysis: Identifiable, Codable, Sendable {
         self.pluginUsages = pluginUsages
         self.isReadable = isReadable
     }
+
+    public var distinctPluginIDs: Set<UUID> {
+        Set(pluginUsages.map(\.pluginID))
+    }
+
+    public var distinctPluginCount: Int {
+        distinctPluginIDs.count
+    }
 }
 
 public struct LogicProjectUsageSummary: Codable, Sendable {

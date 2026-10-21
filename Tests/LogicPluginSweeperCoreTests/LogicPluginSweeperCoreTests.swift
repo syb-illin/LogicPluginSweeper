@@ -262,6 +262,18 @@ final class LogicPluginSweeperCoreTests: XCTestCase {
         XCTAssertEqual(summary.projectAnalyses.first?.pluginUsages.first?.manufacturer, "Acme")
     }
 
+    func testLogicProjectAnalysisCountsDistinctPluginsOnly() {
+        let plugin = PluginRecord(name: "Demo", format: .audioUnit, files: [])
+        let duplicateUsages = [
+            LogicProjectPluginUsage(plugin: plugin, trackName: "Track 1"),
+            LogicProjectPluginUsage(plugin: plugin, trackName: "Track 2")
+        ]
+        let analysis = LogicProjectAnalysis(projectURL: temporaryDirectory.appendingPathComponent("Demo.logicx"), pluginUsages: duplicateUsages)
+
+        XCTAssertEqual(analysis.distinctPluginCount, 1)
+        XCTAssertEqual(analysis.distinctPluginIDs, [plugin.id])
+    }
+
     func testLogicProjectDoesNotAssociateSameNameWithWrongManufacturer() throws {
         let project = temporaryDirectory.appendingPathComponent("Demo.logicx")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
