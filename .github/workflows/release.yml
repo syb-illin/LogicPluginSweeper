@@ -1,7 +1,6 @@
 name: Release
 on:
   push:
-    branches: [main]
     tags: ['v*.*.*']
 concurrency:
   group: release-${{ github.ref }}
@@ -18,7 +17,7 @@ jobs:
       - name: Package source build
         run: |
           swift build -c release
-          tar -czf LogicPluginSweeper-${{ github.sha }}-source.tar.gz Package.swift Sources Tests README.md LICENSE VERSION
+          tar -czf LogicPluginSweeper-${{ github.sha }}-source.tar.gz Package.swift Sources Tests Scripts Assets README.md LICENSE VERSION
       - name: Package unsigned macOS app
         run: |
           version=$(cat VERSION)
@@ -60,28 +59,56 @@ jobs:
           codesign --verify --deep --strict --verbose=2 LogicPluginSweeper.app
           chmod 755 Scripts/verify-app-bundle.sh
           Scripts/verify-app-bundle.sh LogicPluginSweeper.app
+          uninstaller_root="LogicPluginSweeper Uninstaller.app/Contents"
+          mkdir -p "$uninstaller_root/MacOS" "$uninstaller_root/Resources"
+          cp "$binary_dir/LogicPluginSweeperUninstaller" "$uninstaller_root/MacOS/LogicPluginSweeperUninstaller"
+          cp Assets/LogicPluginSweeper.icns "$uninstaller_root/Resources/LogicPluginSweeper.icns"
+          chmod 755 "$uninstaller_root/MacOS/LogicPluginSweeperUninstaller"
+          cat > "$uninstaller_root/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key><string>LogicPluginSweeper Uninstaller</string>
+            <key>CFBundleExecutable</key><string>LogicPluginSweeperUninstaller</string>
+            <key>CFBundleIdentifier</key><string>com.syb-illin.LogicPluginSweeper.Uninstaller</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleName</key><string>LogicPluginSweeper Uninstaller</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleIconFile</key><string>LogicPluginSweeper.icns</string>
+            <key>CFBundleShortVersionString</key><string>${version}</string>
+            <key>CFBundleVersion</key><string>${GITHUB_RUN_NUMBER}</string>
+            <key>LSMinimumSystemVersion</key><string>26.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          codesign --force --deep --sign - "LogicPluginSweeper Uninstaller.app"
+          codesign --verify --deep --strict --verbose=2 "LogicPluginSweeper Uninstaller.app"
+          plutil -lint "$uninstaller_root/Info.plist"
+          test -x "$uninstaller_root/MacOS/LogicPluginSweeperUninstaller"
+          "$uninstaller_root/MacOS/LogicPluginSweeperUninstaller" >/tmp/LogicPluginSweeperUninstaller-startup.log 2>&1 &
+          uninstaller_pid=$!
+          sleep 5
+          if ! kill -0 "$uninstaller_pid" 2>/dev/null; then
+            cat /tmp/LogicPluginSweeperUninstaller-startup.log
+            echo "The packaged uninstaller exited during startup."
+            exit 1
+          fi
+          kill -TERM "$uninstaller_pid" 2>/dev/null || true
+          wait "$uninstaller_pid" 2>/dev/null || true
           archive_version="${version}-macOS-arm64"
           ditto -c -k --keepParent LogicPluginSweeper.app "LogicPluginSweeper-${archive_version}.zip"
           shasum -a 256 "LogicPluginSweeper-${archive_version}.zip" > "LogicPluginSweeper-${archive_version}.zip.sha256"
-          hdiutil create -volname LogicPluginSweeper -srcfolder LogicPluginSweeper.app -format UDZO "LogicPluginSweeper-${archive_version}.dmg"
+          mkdir -p dmg-content
+          cp -R LogicPluginSweeper.app "LogicPluginSweeper Uninstaller.app" dmg-content/
+          ln -s /Applications dmg-content/Applications
+          hdiutil create -volname LogicPluginSweeper -srcfolder dmg-content -format UDZO "LogicPluginSweeper-${archive_version}.dmg"
           shasum -a 256 "LogicPluginSweeper-${archive_version}.dmg" > "LogicPluginSweeper-${archive_version}.dmg.sha256"
       - name: Read SemVer
         id: version
         shell: bash
         run: echo "value=$(cat VERSION)" >> "$GITHUB_OUTPUT"
-      - name: Create prerelease for push
-        if: github.ref_type == 'branch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.value }}-nightly.${{ github.run_number }}
-          name: LogicPluginSweeper nightly ${{ github.run_number }}
-          prerelease: true
-          files: |
-            LogicPluginSweeper-${{ github.sha }}-source.tar.gz
-            LogicPluginSweeper-*-macOS-arm64.zip
-            LogicPluginSweeper-*-macOS-arm64.zip.sha256
-            LogicPluginSweeper-*-macOS-arm64.dmg
-            LogicPluginSweeper-*-macOS-arm64.dmg.sha256
       - name: Create stable release for SemVer tag
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

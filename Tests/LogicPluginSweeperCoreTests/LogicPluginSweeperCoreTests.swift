@@ -13,6 +13,46 @@ final class LogicPluginSweeperCoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: temporaryDirectory)
     }
 
+    func testUninstallerKeepsRecoveryDataAndOnlyClearsCacheByDefault() throws {
+        let support = temporaryDirectory.appendingPathComponent("LogicPluginSweeper")
+        let cache = support.appendingPathComponent("LogicProjectCache")
+        let quarantine = support.appendingPathComponent("Quarantine/record-1")
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: quarantine, withIntermediateDirectories: true)
+        try Data("cached".utf8).write(to: cache.appendingPathComponent("project.json"))
+        try Data("saved-plugin".utf8).write(to: quarantine.appendingPathComponent("plugin.component"))
+        try Data("history".utf8).write(to: support.appendingPathComponent("history.sqlite"))
+        let service = UninstallService(supportDirectory: support, preferencesURL: temporaryDirectory.appendingPathComponent("prefs.plist"), preferencesDomain: "test.\(UUID().uuidString)")
+        let inventory = try service.inventory()
+        XCTAssertEqual(inventory.cacheFileCount, 1)
+        XCTAssertEqual(inventory.cacheBytes, 6)
+        XCTAssertEqual(inventory.removalCount, 1)
+        XCTAssertTrue(inventory.hasHistory)
+        try service.removeData(choice: .keep)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: quarantine.appendingPathComponent("plugin.component").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: support.appendingPathComponent("history.sqlite").path))
+    }
+
+    func testUninstallerExportPreservesNamesBeforeExplicitDataDeletion() throws {
+        let support = temporaryDirectory.appendingPathComponent("LogicPluginSweeper")
+        let quarantine = support.appendingPathComponent("Quarantine/record-1")
+        try FileManager.default.createDirectory(at: quarantine, withIntermediateDirectories: true)
+        try Data("plugin".utf8).write(to: quarantine.appendingPathComponent("^MBassador.component"))
+        let preferences = temporaryDirectory.appendingPathComponent("prefs.plist")
+        try Data("preferences".utf8).write(to: preferences)
+        let service = UninstallService(supportDirectory: support, preferencesURL: preferences, preferencesDomain: "test.\(UUID().uuidString)")
+        let export = temporaryDirectory.appendingPathComponent("Export")
+        try service.exportData(to: export)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: export.appendingPathComponent("LogicPluginSweeper/Quarantine/record-1/^MBassador.component").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: export.appendingPathComponent("Preferences/prefs.plist").path))
+        XCTAssertThrowsError(try service.exportData(to: support.appendingPathComponent("inside")))
+        try service.removeData(choice: .delete)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: support.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: preferences.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: export.appendingPathComponent("LogicPluginSweeper/Quarantine/record-1/^MBassador.component").path))
+    }
+
     func testPluginTotalBytesIsExactSum() {
         let plugin = PluginRecord(name: "Test", format: .vst3, files: [PluginFile(path: URL(fileURLWithPath: "/tmp/a"), byteCount: 10, modifiedAt: .now), PluginFile(path: URL(fileURLWithPath: "/tmp/b"), byteCount: 32, modifiedAt: .now)])
         XCTAssertEqual(plugin.totalBytes, 42)

@@ -40,6 +40,8 @@ Les versions publiées sont disponibles dans la section [Releases](https://githu
 
 Téléchargez l’archive `.zip` ou le `.dmg` correspondant à votre Mac, ouvrez l’application, puis suivez les instructions de macOS si une confirmation de sécurité est demandée.
 
+Le DMG contient aussi **LogicPluginSweeper Uninstaller.app**, un désinstalleur autonome utilisable même si l’application principale ne démarre plus.
+
 > Les versions actuellement distribuées ne sont pas encore signées ni notarisées avec un certificat Developer ID. La signature et la notarisation seront ajoutées lorsque les identifiants Apple de distribution seront configurés.
 
 ## Compatibilité
@@ -57,6 +59,12 @@ L’analyse inspecte aussi les chaînes lisibles du `ProjectData` binaire de Log
 3. Consultez l’inventaire, l’espace occupé et les recommandations.
 4. Vérifiez les dépendances Logic Pro avant toute action.
 5. Supprimez les éléments sélectionnés avec ou sans sauvegarde externe, ou restaurez-les depuis l’historique.
+
+## Désinstallation
+
+Ouvrez **LogicPluginSweeper Uninstaller.app** depuis le DMG, quittez LogicPluginSweeper, puis sélectionnez l’application installée si elle n’est pas détectée dans `/Applications`. Le désinstalleur déplace l’application vers la corbeille et supprime par défaut uniquement le cache recréable des projets. Il affiche le nombre de fichiers du cache, sa taille, sa dernière modification et son emplacement.
+
+L’historique et les plugins conservés pour restauration restent en place par défaut. Vous pouvez exporter une copie du dossier de données et des préférences avant de choisir explicitement leur suppression définitive. Cet export conserve les noms et l’arborescence des fichiers ; pour restaurer les plugins depuis l’application après réinstallation, remettez le dossier `LogicPluginSweeper` exporté dans `~/Library/Application Support/`. Les plugins audio toujours installés ne sont jamais supprimés par le désinstalleur. Si macOS refuse la mise à la corbeille de l’application, aucune donnée locale n’est effacée.
 
 Depuis un projet analysé, sélectionnez un morceau pour voir ses plugins. Depuis un plugin, ouvrez sa fiche pour voir les projets qui le référencent, sa taille, son format, son état, son emplacement et les liens officiels disponibles. Les mesures CPU/mémoire ne sont pas affichées tant qu’un profilage dédié et fiable n’a pas été exécuté.
 
