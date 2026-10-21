@@ -64,7 +64,7 @@ public struct PluginScanner: Sendable {
             let bundle = Bundle(url: url)
             let name = (bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ?? url.deletingPathExtension().lastPathComponent
             let version = bundle?.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            let manufacturer = bundle?.object(forInfoDictionaryKey: "CFBundleVendor") as? String
+            let manufacturer = manufacturerValue(for: bundle, pluginName: name)
             records.append(PluginRecord(name: name, manufacturer: manufacturer, version: version, format: format, files: inventory.files, officialURL: nil, bundleURL: url, measuredBytes: inventory.byteCount, fileCount: inventory.fileCount))
             enumerator.skipDescendants()
         }
@@ -73,6 +73,38 @@ public struct PluginScanner: Sendable {
 
     private func isPluginBundle(_ url: URL) -> Bool {
         supportedPluginExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func manufacturerValue(for bundle: Bundle?, pluginName: String) -> String? {
+        guard let info = bundle?.infoDictionary else { return nil }
+        let metadataKeys = ["CFBundleVendor", "CFBundleManufacturer", "Manufacturer", "Vendor", "CompanyName", "AAXManufacturer", "kAudioUnitManufacturer", "VST3Vendor"]
+        for key in metadataKeys {
+            if let value = cleanManufacturer(info[key] as? String, pluginName: pluginName) { return value }
+        }
+        if let components = info["AudioComponents"] as? [[String: Any]] {
+            for component in components {
+                guard let displayName = component["name"] as? String,
+                      let separator = displayName.firstIndex(of: ":") else { continue }
+                let value = String(displayName[..<separator])
+                if let value = cleanManufacturer(value, pluginName: pluginName) { return value }
+            }
+        }
+        guard let identifier = info["CFBundleIdentifier"] as? String else { return nil }
+        let ignored = Set(["com", "org", "net", "io", "co", "au", "vst", "vst2", "vst3", "clap", "aax", "audio", "plugin", "plugins"])
+        for component in identifier.split(separator: ".").map(String.init) where !ignored.contains(component.lowercased()) {
+            if let value = cleanManufacturer(component.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " "), pluginName: pluginName) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func cleanManufacturer(_ value: String?, pluginName: String) -> String? {
+        guard let value else { return nil }
+        let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard cleaned.count >= 2, cleaned.count <= 80,
+              cleaned.localizedCaseInsensitiveCompare(pluginName) != .orderedSame else { return nil }
+        return cleaned
     }
 
     private func sizeFiles(in bundle: URL, keys: Set<URLResourceKey>, collectDetails: Bool, isCancelled: @Sendable () -> Bool) -> FileInventory {

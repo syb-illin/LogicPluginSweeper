@@ -162,6 +162,23 @@ final class LogicPluginSweeperCoreTests: XCTestCase {
         XCTAssertEqual(plugin.totalBytes, Int64(plist.count + 12))
     }
 
+    func testScannerReadsAudioUnitManufacturerFromComponentDisplayName() throws {
+        let bundle = temporaryDirectory.appendingPathComponent("Heatwave.component")
+        let contents = bundle.appendingPathComponent("Contents")
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        let info: [String: Any] = [
+            "CFBundleDisplayName": "Heatwave",
+            "CFBundleIdentifier": "com.slatedigital.heatwave",
+            "AudioComponents": [["name": "Slate Digital: Heatwave", "manufacturer": "SlDg", "type": "aufx", "subtype": "dLay"]]
+        ]
+        let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        try plist.write(to: contents.appendingPathComponent("Info.plist"))
+
+        let result = PluginScanner(configuration: PluginScanConfiguration(roots: [temporaryDirectory], includeSystemLocations: false)).scan()
+
+        XCTAssertEqual(result.plugins.first?.manufacturer, "Slate Digital")
+    }
+
     func testScannerRecognizesEverySupportedFormat() throws {
         let root = temporaryDirectory.appendingPathComponent("Plugins")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
