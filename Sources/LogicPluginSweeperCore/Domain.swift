@@ -105,6 +105,13 @@ public struct PluginRecord: Codable, Identifiable, Hashable, Sendable {
                      scannedAt: scannedAt, healthMessage: message, bundleURL: bundleURL,
                      measuredBytes: measuredBytes, fileCount: fileCount)
     }
+
+    public func withManufacturer(_ manufacturer: String?) -> PluginRecord {
+        PluginRecord(id: id, name: name, manufacturer: manufacturer, version: version, format: format,
+                     files: files, health: health, license: license, officialURL: officialURL,
+                     scannedAt: scannedAt, healthMessage: healthMessage, bundleURL: bundleURL,
+                     measuredBytes: measuredBytes, fileCount: fileCount)
+    }
 }
 
 public struct RemovalRecord: Codable, Identifiable, Sendable {

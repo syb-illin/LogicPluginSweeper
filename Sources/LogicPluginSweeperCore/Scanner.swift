@@ -28,6 +28,11 @@ public struct PluginScanner: Sendable {
         self.configuration = configuration
     }
 
+    public func manufacturer(for plugin: PluginRecord) -> String? {
+        guard let bundleURL = plugin.bundleURL, let bundle = Bundle(url: bundleURL) else { return plugin.manufacturer }
+        return manufacturerValue(for: bundle, pluginName: plugin.name) ?? plugin.manufacturer
+    }
+
     public func scan() -> ScanSummary {
         scan(isCancelled: { false })
     }

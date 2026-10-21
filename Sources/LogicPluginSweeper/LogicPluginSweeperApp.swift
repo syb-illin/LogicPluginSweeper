@@ -145,13 +145,23 @@ final class AppModel {
         Task { [weak self] in
             guard let self else { return }
             await self.notifications.prepare()
+            self.lastScan = try? await self.store?.loadLastScan()
             if let storedPlugins = try? await self.store?.loadPlugins() {
-                self.plugins = storedPlugins.filter { plugin in
+                let refreshedPlugins = storedPlugins.map { plugin in
+                    guard plugin.manufacturer?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false,
+                          let manufacturer = self.scanner.manufacturer(for: plugin),
+                          !manufacturer.isEmpty else { return plugin }
+                    return plugin.withManufacturer(manufacturer)
+                }
+                self.plugins = refreshedPlugins.filter { plugin in
                     guard let bundleURL = plugin.bundleURL else { return false }
                     return FileManager.default.fileExists(atPath: bundleURL.path)
                 }
+                if refreshedPlugins != storedPlugins {
+                    let snapshot = ScanSummary(plugins: refreshedPlugins, crashLogCount: 0, scannedAt: self.lastScan ?? .now)
+                    Task { try? await self.store?.save(scan: snapshot) }
+                }
             }
-            self.lastScan = try? await self.store?.loadLastScan()
             if let storedRemovals = try? await self.store?.loadRemovals() {
                 self.removalHistory = storedRemovals
             }
