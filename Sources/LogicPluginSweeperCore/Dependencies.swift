@@ -169,6 +169,7 @@ public struct LogicProjectAnalyzer: Sendable {
             if let propertyList = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) {
                 let values = propertyListStrings(from: propertyList)
                 chunks.append(normalized(values.joined(separator: "\n")))
+                if !values.isEmpty { runs.append(values.joined(separator: " ")) }
                 runs.append(contentsOf: values)
             }
         }
