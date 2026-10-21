@@ -904,6 +904,23 @@ private enum DetailSelection: Identifiable {
 private struct UsageStatsView: View {
     let summary: LogicProjectUsageSummary?
 
+    private struct FormatTotal: Identifiable {
+        let format: String
+        let count: Int
+        var id: String { format }
+    }
+
+    private var formatTotals: [FormatTotal] {
+        guard let summary else { return [] }
+        return Dictionary(grouping: summary.pluginUsage, by: { $0.format.rawValue })
+            .map { FormatTotal(format: $0.key, count: $0.value.count) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private var totalReferences: Int {
+        summary?.pluginUsage.reduce(0) { $0 + $1.projectCount } ?? 0
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(L10n.text("app.stats.title")).font(.title.bold())
@@ -913,13 +930,45 @@ private struct UsageStatsView: View {
                 if summary.pluginUsage.isEmpty {
                     ContentUnavailableView(L10n.text("app.stats.empty.title"), systemImage: "chart.bar.xaxis", description: Text(L10n.text("app.stats.empty.description")))
                 } else {
-                    Chart(summary.pluginUsage.prefix(12)) { usage in
-                        BarMark(x: .value(L10n.text("app.chart.projects"), usage.projectCount), y: .value(L10n.text("app.chart.plugin"), usage.pluginName))
-                            .foregroundStyle(by: .value(L10n.text("app.chart.format"), usage.format.rawValue))
+                    HStack(spacing: 12) {
+                        MetricCard(title: L10n.text("app.stats.analyzed"), value: "\(summary.analyzedProjectCount)", icon: "checkmark.circle.fill")
+                        MetricCard(title: L10n.text("app.stats.usedPlugins"), value: "\(summary.pluginUsage.count)", icon: "pianokeys")
+                        MetricCard(title: L10n.text("app.stats.references"), value: "\(totalReferences)", icon: "link")
                     }
-                    .frame(minHeight: 320)
-                    Text(L10n.text("app.stats.description"))
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(L10n.text("app.stats.topPlugins")).font(.headline)
+                            Chart(summary.pluginUsage.prefix(12)) { usage in
+                                BarMark(x: .value(L10n.text("app.chart.projects"), usage.projectCount), y: .value(L10n.text("app.chart.plugin"), usage.pluginName))
+                                    .foregroundStyle(by: .value(L10n.text("app.chart.format"), usage.format.rawValue))
+                                    .annotation(position: .trailing, alignment: .center) {
+                                        Text("\(usage.projectCount)").font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                                    }
+                            }
+                            .chartLegend(position: .bottom, alignment: .leading)
+                            .frame(minHeight: 330)
+                        }
+                        .padding(18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 16))
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(L10n.text("app.stats.formats")).font(.headline)
+                            Chart(formatTotals) { item in
+                                SectorMark(angle: .value(L10n.text("app.chart.plugins"), item.count), innerRadius: .ratio(0.62), angularInset: 2)
+                                    .foregroundStyle(by: .value(L10n.text("app.chart.format"), item.format))
+                                    .annotation(position: .overlay) {
+                                        Text("\(item.count)").font(.caption.weight(.semibold)).foregroundStyle(.white)
+                                    }
+                            }
+                            .chartLegend(position: .bottom, alignment: .leading)
+                            .frame(minHeight: 330)
+                        }
+                        .padding(18)
+                        .frame(width: 250, alignment: .leading)
+                        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    Text(L10n.text("app.stats.description")).font(.caption).foregroundStyle(.secondary)
                 }
             } else {
                 ContentUnavailableView(L10n.text("app.stats.none.title"), systemImage: "chart.bar.xaxis", description: Text(L10n.text("app.stats.none.description")))
@@ -1528,6 +1577,8 @@ private struct LibraryToolbar: ToolbarContent {
                     .help(L10n.format("app.update.download", offer.version.description))
                     .foregroundStyle(.green)
             }
+            Button { showingStats = true } label: { Image(systemName: "chart.bar.xaxis") }
+                .help(L10n.text("app.stats"))
             LibraryActionsMenu(model: model, selectedFormat: $selectedFormat, selectedHealth: $selectedHealth, selectedLicense: $selectedLicense, referenceFilter: $referenceFilter, sortOption: $sortOption, selectedPluginIDs: $selectedPluginIDs, showingStats: $showingStats, showingAbout: $showingAbout)
         }
     }
