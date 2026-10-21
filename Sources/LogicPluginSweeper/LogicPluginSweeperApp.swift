@@ -594,7 +594,7 @@ struct ContentView: View {
                         .help(L10n.text("app.metrics.logicUsage.help"))
                 }
                 if let sourceLabel = model.selectedProjectSourceLabel {
-                    ProjectAnalysisCard(sourceLabel: sourceLabel, projects: model.discoveredProjects, processedProjects: model.processedProjects, activeProject: model.activeProject, summary: model.usageSummary, isDiscovering: model.isDiscoveringProjects, isAnalyzing: model.isAnalyzingProjects, message: model.message, filter: searchText) { project in
+                    ProjectAnalysisCard(sourceLabel: sourceLabel, projects: model.discoveredProjects, processedProjects: model.processedProjects, activeProject: model.activeProject, summary: model.usageSummary, plugins: model.plugins, isDiscovering: model.isDiscoveringProjects, isAnalyzing: model.isAnalyzingProjects, message: model.message, filter: searchText) { project in
                         detailSelection = .project(project)
                     }
                 }
@@ -942,6 +942,7 @@ private struct ProjectAnalysisCard: View {
     let processedProjects: [URL: LogicProjectAnalysis]
     let activeProject: URL?
     let summary: LogicProjectUsageSummary?
+    let plugins: [PluginRecord]
     let isDiscovering: Bool
     let isAnalyzing: Bool
     let message: String
@@ -1018,7 +1019,7 @@ private struct ProjectAnalysisCard: View {
                             ForEach(filteredProjects, id: \.self) { project in
                                 let status = projectStatus(project)
                                 Button { onSelectProject(project) } label: {
-                                    ProjectAnalysisRow(project: project, analysis: processedProjects[project], status: status)
+                                    ProjectAnalysisRow(project: project, analysis: processedProjects[project], plugins: plugins, status: status)
                                 }
                                 .buttonStyle(.plain)
                                 .disabled(status != .analyzed)
@@ -1061,13 +1062,44 @@ private struct ProjectAnalysisCard: View {
 private struct ProjectAnalysisRow: View {
     let project: URL
     let analysis: LogicProjectAnalysis?
+    let plugins: [PluginRecord]
     let status: ProjectStatus
 
+    private struct PluginPill: Identifiable {
+        let id: UUID
+        let name: String
+        let manufacturer: String?
+        let format: PluginFormat
+        let version: String?
+        let bytes: Int64
+        let trackNames: [String]
+
+        var detail: String {
+            var lines = [name]
+            if let manufacturer, !manufacturer.isEmpty { lines.append("Fabricant : \(manufacturer)") }
+            lines.append("Format : \(format.rawValue)")
+            if let version, !version.isEmpty { lines.append("Version : \(version)") }
+            lines.append("Taille : \(readableSize(bytes))")
+            if !trackNames.isEmpty { lines.append("Pistes : \(trackNames.joined(separator: ", "))") }
+            return lines.joined(separator: "\n")
+        }
+    }
+
+    private var pluginRecords: [UUID: PluginRecord] { Dictionary(uniqueKeysWithValues: plugins.map { ($0.id, $0) }) }
+
+    private var pluginPills: [PluginPill] {
+        let grouped = Dictionary(grouping: analysis?.pluginUsages ?? [], by: \.pluginID)
+        return grouped.compactMap { pluginID, usages in
+            guard let usage = usages.first else { return nil }
+            let record = pluginRecords[pluginID]
+            let tracks = Array(Set(usages.compactMap(\.trackName))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            return PluginPill(id: pluginID, name: usage.pluginName, manufacturer: usage.manufacturer,
+                              format: usage.format, version: record?.version, bytes: record?.totalBytes ?? 0, trackNames: tracks)
+        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private var pluginNames: [String] {
-        Array(Set((analysis?.pluginUsages ?? []).map(\.pluginName)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }))
-            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        pluginPills.map(\.name)
     }
 
     private var manufacturers: [String] {
@@ -1096,14 +1128,15 @@ private struct ProjectAnalysisRow: View {
 
             HStack(spacing: 5) {
                 if status == .analyzed && !pluginNames.isEmpty {
-                    ForEach(pluginNames.prefix(3), id: \.self) { pluginName in
-                        Text(pluginName)
+                    ForEach(pluginPills.prefix(3)) { pill in
+                        Text(pill.name)
                             .font(.caption2.weight(.medium))
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(.purple.opacity(0.13), in: Capsule())
+                            .help(pill.detail)
                     }
                     if pluginNames.count > 3 {
                         Text("+\(pluginNames.count - 3)")

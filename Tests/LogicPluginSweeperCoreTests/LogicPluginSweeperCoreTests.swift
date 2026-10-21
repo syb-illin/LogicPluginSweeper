@@ -286,6 +286,30 @@ final class LogicPluginSweeperCoreTests: XCTestCase {
         XCTAssertTrue(summary.pluginUsage.isEmpty)
     }
 
+    func testLogicProjectIgnoresShortPluginNameInsideLargerWords() throws {
+        let project = temporaryDirectory.appendingPathComponent("FalsePositive.logicx")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try Data("Project Profile Processor".utf8).write(to: project.appendingPathComponent("ProjectData"))
+        let plugin = PluginRecord(name: "Pro", manufacturer: "Acme", format: .audioUnit, files: [])
+
+        let summary = LogicProjectAnalyzer().analyze(projects: [project], plugins: [plugin])
+
+        XCTAssertTrue(summary.pluginUsage.isEmpty)
+        XCTAssertEqual(summary.projectAnalyses.first?.distinctPluginCount, 0)
+    }
+
+    func testLogicProjectDoesNotCombineNameAndManufacturerFromSeparateMetadataRuns() throws {
+        let project = temporaryDirectory.appendingPathComponent("SeparatedMetadata.logicx")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try Data("Acme\nUnrelated Demo project".utf8).write(to: project.appendingPathComponent("ProjectData"))
+        let plugin = PluginRecord(name: "Demo", manufacturer: "Acme", format: .audioUnit, files: [])
+
+        let summary = LogicProjectAnalyzer().analyze(projects: [project], plugins: [plugin])
+
+        XCTAssertTrue(summary.pluginUsage.isEmpty)
+        XCTAssertEqual(summary.projectAnalyses.first?.distinctPluginCount, 0)
+    }
+
     func testLogicProjectMatchesOverlappingNamesInOnePass() throws {
         let project = temporaryDirectory.appendingPathComponent("Overlapping.logicx")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

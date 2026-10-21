@@ -56,7 +56,7 @@ public struct LogicProjectCache: Sendable {
             fileDescriptions.append("\(url.path)|\(values.fileSize ?? -1)|\(values.contentModificationDate?.timeIntervalSince1970 ?? -1)")
         }
         guard !fileDescriptions.isEmpty else { return nil }
-        return digest((["logic-project-cache-v2"] + fileDescriptions.sorted() + pluginKeys.sorted()).joined(separator: "\n"))
+        return digest((["logic-project-cache-v3"] + fileDescriptions.sorted() + pluginKeys.sorted()).joined(separator: "\n"))
     }
 
     public func load(project: URL, fingerprint: String) -> [CachedUsage]? {

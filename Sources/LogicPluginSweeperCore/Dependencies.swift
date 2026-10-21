@@ -73,9 +73,17 @@ public struct LogicProjectAnalyzer: Sendable {
             let normalizedRuns = candidateMatches.names.isEmpty && candidateMatches.signatures.isEmpty ? [] : content.runs.map(normalized)
             for index in candidateMatches.names.union(candidateMatches.signatures).sorted() {
                 let plugin = pluginsWithSignatures[index].0
-                if !candidateMatches.signatures.contains(index), let manufacturer = plugin.manufacturer {
-                    let normalizedManufacturer = normalized(manufacturer)
-                    if normalizedManufacturer.count >= 3 && !content.text.contains(normalizedManufacturer) { continue }
+                let hasSignatureEvidence = candidateMatches.signatures.contains(index)
+                if !hasSignatureEvidence {
+                    let hasBoundedName = containsBounded(normalized(plugin.name), in: normalizedRuns)
+                    guard hasBoundedName else { continue }
+                    if let manufacturer = plugin.manufacturer {
+                        let normalizedManufacturer = normalized(manufacturer)
+                        guard normalizedManufacturer.count >= 3,
+                              containsPluginMetadata(name: normalized(plugin.name), manufacturer: normalizedManufacturer, in: normalizedRuns) else { continue }
+                    } else {
+                        guard normalized(plugin.name).filter({ $0.isLetter || $0.isNumber }).count >= 5 else { continue }
+                    }
                 }
                 if !projectURLsByPlugin[plugin.id, default: []].contains(project) {
                     projectURLsByPlugin[plugin.id, default: []].append(project)
@@ -105,12 +113,12 @@ public struct LogicProjectAnalyzer: Sendable {
     private func matches(_ plugin: PluginRecord, signatures: [String], in contents: String) -> Bool {
         if signatures.contains(where: contents.contains) { return true }
         let name = normalized(plugin.name)
-        guard name.count >= 3, contents.contains(name) else { return false }
+        guard name.count >= 3, containsBounded(name, in: [contents]) else { return false }
         let manufacturer = plugin.manufacturer.flatMap { value in
             let value = normalized(value)
             return value.count >= 3 ? value : nil
         }
-        if let manufacturer { return contents.contains(manufacturer) }
+        if let manufacturer { return containsBounded(manufacturer, in: [contents]) }
         return true
     }
 
@@ -203,6 +211,32 @@ public struct LogicProjectAnalyzer: Sendable {
         return nil
     }
 
+    private func containsBounded(_ value: String, in texts: [String]) -> Bool {
+        let normalizedValue = normalized(value)
+        guard !normalizedValue.isEmpty else { return false }
+        return texts.contains { text in
+            var searchStart = text.startIndex
+            while searchStart < text.endIndex,
+                  let range = text.range(of: normalizedValue, range: searchStart..<text.endIndex) {
+                let before = range.lowerBound > text.startIndex ? text[text.index(before: range.lowerBound)] : nil
+                let after = range.upperBound < text.endIndex ? text[range.upperBound] : nil
+                if !isWordCharacter(before) && !isWordCharacter(after) { return true }
+                searchStart = range.upperBound
+            }
+            return false
+        }
+    }
+
+    private func containsPluginMetadata(name: String, manufacturer: String, in texts: [String]) -> Bool {
+        texts.contains { text in
+            containsBounded(name, in: [text]) && containsBounded(manufacturer, in: [text])
+        }
+    }
+
+    private func isWordCharacter(_ character: Character?) -> Bool {
+        character?.isLetter == true || character?.isNumber == true
+    }
+
     private struct SearchableProjectContent {
         let text: String
         let runs: [String]
@@ -290,7 +324,7 @@ public struct LogicProjectAnalyzer: Sendable {
     }
 
     private func normalized(_ value: String) -> String {
-        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased()
     }
 
     private let maxMetadataFileSize: Int = 32 * 1024 * 1024
