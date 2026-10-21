@@ -1,0 +1,95 @@
+name: Release
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+      - name: Package source build
+        run: |
+          swift build -c release
+          tar -czf LogicPluginSweeper-${{ github.sha }}-source.tar.gz Package.swift Sources Tests README.md LICENSE VERSION
+      - name: Package unsigned macOS app
+        run: |
+          version=$(cat VERSION)
+          binary_dir=$(swift build -c release --show-bin-path)
+          app_root="LogicPluginSweeper.app/Contents"
+          mkdir -p "$app_root/MacOS" "$app_root/Resources"
+          cp "$binary_dir/LogicPluginSweeper" "$app_root/MacOS/LogicPluginSweeper"
+          resource_bundle="$binary_dir/LogicPluginSweeper_LogicPluginSweeper.bundle"
+          test -d "$resource_bundle"
+          cp -R "$resource_bundle" "$app_root/Resources/"
+          cp Assets/LogicPluginSweeper.icns "$app_root/Resources/LogicPluginSweeper.icns"
+          chmod 755 "$app_root/MacOS/LogicPluginSweeper"
+          cat > "$app_root/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key><string>LogicPluginSweeper</string>
+            <key>CFBundleExecutable</key><string>LogicPluginSweeper</string>
+            <key>CFBundleIdentifier</key><string>com.syb-illin.LogicPluginSweeper</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleName</key><string>LogicPluginSweeper</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleIconFile</key><string>LogicPluginSweeper.icns</string>
+            <key>CFBundleIconName</key><string>LogicPluginSweeper</string>
+            <key>CFBundleShortVersionString</key><string>${version}</string>
+            <key>CFBundleVersion</key><string>${GITHUB_RUN_NUMBER}</string>
+            <key>LSMinimumSystemVersion</key><string>26.0</string>
+            <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          test -x "$app_root/MacOS/LogicPluginSweeper"
+          test -d "$app_root/Resources/LogicPluginSweeper_LogicPluginSweeper.bundle"
+          test -f "$app_root/Resources/LogicPluginSweeper.icns"
+          codesign --remove-signature "$app_root/MacOS/LogicPluginSweeper" || true
+          codesign --force --deep --sign - LogicPluginSweeper.app
+          codesign --verify --deep --strict --verbose=2 LogicPluginSweeper.app
+          chmod 755 Scripts/verify-app-bundle.sh
+          Scripts/verify-app-bundle.sh LogicPluginSweeper.app
+          archive_version="${version}-macOS-arm64"
+          ditto -c -k --keepParent LogicPluginSweeper.app "LogicPluginSweeper-${archive_version}.zip"
+          shasum -a 256 "LogicPluginSweeper-${archive_version}.zip" > "LogicPluginSweeper-${archive_version}.zip.sha256"
+          hdiutil create -volname LogicPluginSweeper -srcfolder LogicPluginSweeper.app -format UDZO "LogicPluginSweeper-${archive_version}.dmg"
+          shasum -a 256 "LogicPluginSweeper-${archive_version}.dmg" > "LogicPluginSweeper-${archive_version}.dmg.sha256"
+      - name: Read SemVer
+        id: version
+        shell: bash
+        run: echo "value=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Create prerelease for push
+        if: github.ref_type == 'branch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.value }}-nightly.${{ github.run_number }}
+          name: LogicPluginSweeper nightly ${{ github.run_number }}
+          prerelease: true
+          files: |
+            LogicPluginSweeper-${{ github.sha }}-source.tar.gz
+            LogicPluginSweeper-*-macOS-arm64.zip
+            LogicPluginSweeper-*-macOS-arm64.zip.sha256
+            LogicPluginSweeper-*-macOS-arm64.dmg
+            LogicPluginSweeper-*-macOS-arm64.dmg.sha256
+      - name: Create stable release for SemVer tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            LogicPluginSweeper-${{ github.sha }}-source.tar.gz
+            LogicPluginSweeper-*-macOS-arm64.zip
+            LogicPluginSweeper-*-macOS-arm64.zip.sha256
+            LogicPluginSweeper-*-macOS-arm64.dmg
+            LogicPluginSweeper-*-macOS-arm64.dmg.sha256

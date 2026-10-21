@@ -1,0 +1,70 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Swift toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -c release
+      - name: Test with coverage
+        run: swift test --enable-code-coverage
+      - name: Export LCOV coverage
+        shell: bash
+        run: |
+          test_binary=$(find .build -type f -path '*PackageTests.xctest/Contents/MacOS/*PackageTests' ! -path '*.dSYM/*' -perm -111 | head -n 1)
+          profile_path=$(find .build -type f -name default.profdata | head -n 1)
+          test -n "$test_binary"
+          test -n "$profile_path"
+          xcrun llvm-cov export -format=lcov -ignore-filename-regex='(^|/)(Tests|\\.build)/' "$test_binary" -instr-profile "$profile_path" > coverage.lcov
+          coverage=$(xcrun llvm-cov report -ignore-filename-regex='(^|/)(Tests|\\.build)/' "$test_binary" -instr-profile "$profile_path" | awk '$1 == "TOTAL" { print $10; exit }')
+          coverage=${coverage:-0%}
+          coverage_number="${coverage%\%}"
+          color=$(awk -v value="$coverage_number" 'BEGIN { if (value >= 90) print "#16a34a"; else if (value >= 75) print "#2563eb"; else print "#dc2626" }')
+          cat > coverage.svg <<EOF
+          <svg xmlns="http://www.w3.org/2000/svg" width="160" height="20" role="img" aria-label="coverage: ${coverage}">
+            <title>coverage: ${coverage}</title>
+            <rect width="160" height="20" rx="3" fill="#111827"/>
+            <rect x="80" width="80" height="20" rx="3" fill="${color}"/>
+            <path fill="#000" opacity=".14" d="M80 0h77a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H80z"/>
+            <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="10" font-weight="600">
+              <text x="40" y="14">coverage</text><text x="120" y="14">${coverage}</text>
+            </g>
+          </svg>
+          EOF
+          xcrun llvm-cov report -ignore-filename-regex='(^|/)(Tests|\\.build)/' "$test_binary" -instr-profile "$profile_path"
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.lcov
+            coverage.svg
+      - name: Publish self-hosted coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          badge_dir=$(mktemp -d)
+          cp coverage.svg "$badge_dir/coverage.svg"
+          rm -f coverage.svg
+          git fetch origin coverage || true
+          if git show-ref --verify --quiet refs/remotes/origin/coverage; then
+            git checkout -B coverage origin/coverage
+          else
+            git checkout --orphan coverage
+          fi
+          git rm -rf . >/dev/null 2>&1 || true
+          cp "$badge_dir/coverage.svg" coverage.svg
+          git add coverage.svg
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "ci: update coverage badge" || true
+          git push origin HEAD:coverage
