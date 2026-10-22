@@ -484,21 +484,21 @@ final class AppModel {
         isAnalyzingProjects = true
         let generation = projectAnalysisGeneration
         message = L10n.format("app.projects.inProgress.count", projects.count); messageIsError = false; messageActionURL = nil
-        projectAnalysisTask = Task.detached(priority: .userInitiated) { [self] in
+        projectAnalysisTask = Task.detached(priority: .userInitiated) { [weak self] in
             let summary = LogicProjectAnalyzer(cache: LogicProjectCache(directory: LogicProjectCache.defaultDirectory)).analyze(projects: projects, plugins: installedPlugins, onProjectStarted: { project in
-                Task { @MainActor in
-                    guard self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
                     self.activeProject = project
                 }
             }) { _, analysis in
-                Task { @MainActor in
-                    guard self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
+                Task { @MainActor [weak self] in
+                    guard let self, self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
                     self.processedProjects[analysis.projectURL] = analysis
                     if self.activeProject == analysis.projectURL { self.activeProject = nil }
                 }
             }
-            await MainActor.run {
-                guard !Task.isCancelled, self.projectAnalysisGeneration == generation else { return }
+            await MainActor.run { [weak self] in
+                guard let self, !Task.isCancelled, self.projectAnalysisGeneration == generation else { return }
                 self.usageSummary = summary
                 self.processedProjects = Dictionary(uniqueKeysWithValues: summary.projectAnalyses.map { ($0.projectURL, $0) })
                 self.isAnalyzingProjects = false

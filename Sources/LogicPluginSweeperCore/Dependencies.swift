@@ -325,7 +325,7 @@ public struct LogicProjectAnalyzer: Sendable {
     }
 
     private func normalized(_ value: String) -> String {
-        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).lowercased()
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX")).lowercased()
     }
 
     private let maxMetadataFileSize: Int = 32 * 1024 * 1024
