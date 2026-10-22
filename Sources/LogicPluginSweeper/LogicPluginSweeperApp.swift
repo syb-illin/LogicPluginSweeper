@@ -1076,32 +1076,41 @@ private struct ProjectAnalysisCard: View {
             }
             if !projects.isEmpty {
                 DisclosureGroup(isExpanded: $isShowingProjects) {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 12) {
-                                Text(L10n.text("app.projects.card.column.project"))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(L10n.text("app.projects.card.column.plugins"))
-                                    .frame(width: ProjectAnalysisColumnWidth.plugins, alignment: .leading)
-                                Text(L10n.text("app.projects.card.column.manufacturers"))
-                                    .frame(width: ProjectAnalysisColumnWidth.manufacturers, alignment: .leading)
-                                Text(L10n.text("app.projects.card.column.status"))
-                                    .frame(width: ProjectAnalysisColumnWidth.status, alignment: .trailing)
-                            }
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            ForEach(filteredProjects, id: \.self) { project in
-                                let status = projectStatus(project)
-                                Button { onSelectProject(project) } label: {
-                                    ProjectAnalysisRow(project: project, analysis: processedProjects[project], plugins: plugins, status: status)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 12) {
+                                    Text(L10n.text("app.projects.card.column.project"))
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    Text(L10n.text("app.projects.card.column.plugins"))
+                                        .frame(width: ProjectAnalysisColumnWidth.plugins, alignment: .leading)
+                                    Text(L10n.text("app.projects.card.column.manufacturers"))
+                                        .frame(width: ProjectAnalysisColumnWidth.manufacturers, alignment: .leading)
+                                    Text(L10n.text("app.projects.card.column.status"))
+                                        .frame(width: ProjectAnalysisColumnWidth.status, alignment: .trailing)
                                 }
-                                .buttonStyle(.plain)
-                                .disabled(status != .analyzed)
-                                .opacity(status == .pending ? 0.5 : 1)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                ForEach(filteredProjects, id: \.self) { project in
+                                    let status = projectStatus(project)
+                                    Button { onSelectProject(project) } label: {
+                                        ProjectAnalysisRow(project: project, analysis: processedProjects[project], plugins: plugins, status: status)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(status != .analyzed)
+                                    .opacity(status == .pending ? 0.5 : 1)
+                                    .id(project)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 320)
+                        .onChange(of: activeProject) { _, project in
+                            guard let project else { return }
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                proxy.scrollTo(project, anchor: .center)
                             }
                         }
                     }
-                    .frame(maxHeight: 320)
                 } label: {
                     Text(L10n.format("app.projects.card.files", projects.count))
                         .font(.subheadline.weight(.medium))
