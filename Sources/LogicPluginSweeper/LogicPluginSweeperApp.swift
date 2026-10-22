@@ -472,6 +472,11 @@ final class AppModel {
                 return url.pathExtension.lowercased() == "logicx" ? [url] : LogicProjectLocator().find(in: url)
             }.reduce(into: [URL]()) { result, project in
                 if !result.contains(project) { result.append(project) }
+            }.sorted {
+                let nameOrder = $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent)
+                return nameOrder == .orderedSame
+                    ? $0.path.localizedStandardCompare($1.path) == .orderedAscending
+                    : nameOrder == .orderedAscending
             }
             await MainActor.run {
                 guard !Task.isCancelled, let self, self.projectAnalysisGeneration == generation else { return }
