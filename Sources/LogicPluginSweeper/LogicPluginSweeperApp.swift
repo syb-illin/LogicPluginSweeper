@@ -489,30 +489,31 @@ final class AppModel {
     private func startProjectAnalysis(projects: [URL], installedPlugins: [PluginRecord]) {
         isAnalyzingProjects = true
         let generation = projectAnalysisGeneration
+        let modelReference = WeakAppModelReference(self)
         message = L10n.format("app.projects.inProgress.count", projects.count); messageIsError = false; messageActionURL = nil
-        projectAnalysisTask = Task.detached(priority: .userInitiated) { [weak self] in
+        projectAnalysisTask = Task.detached(priority: .userInitiated) { [modelReference] in
             let summary = LogicProjectAnalyzer(cache: LogicProjectCache(directory: LogicProjectCache.defaultDirectory)).analyze(projects: projects, plugins: installedPlugins, onProjectStarted: { project in
-                Task { @MainActor [weak self] in
-                    guard let self, self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
-                    self.activeProject = project
+                Task { @MainActor in
+                    guard let model = modelReference.value, model.isAnalyzingProjects, model.projectAnalysisGeneration == generation else { return }
+                    model.activeProject = project
                 }
             }) { _, analysis in
-                Task { @MainActor [weak self] in
-                    guard let self, self.isAnalyzingProjects, self.projectAnalysisGeneration == generation else { return }
-                    self.processedProjects[analysis.projectURL] = analysis
-                    if self.activeProject == analysis.projectURL { self.activeProject = nil }
+                Task { @MainActor in
+                    guard let model = modelReference.value, model.isAnalyzingProjects, model.projectAnalysisGeneration == generation else { return }
+                    model.processedProjects[analysis.projectURL] = analysis
+                    if model.activeProject == analysis.projectURL { model.activeProject = nil }
                 }
             }
-            await MainActor.run { [weak self] in
-                guard let self, !Task.isCancelled, self.projectAnalysisGeneration == generation else { return }
-                self.usageSummary = summary
-                self.processedProjects = Dictionary(summary.projectAnalyses.map { ($0.projectURL, $0) }, uniquingKeysWith: { first, _ in first })
-                self.isAnalyzingProjects = false
-                self.activeProject = nil
-                self.message = L10n.format("app.projects.completed", summary.analyzedProjectCount, summary.pluginUsage.count); self.messageIsError = false; self.messageActionURL = nil
+            await MainActor.run {
+                guard let model = modelReference.value, !Task.isCancelled, model.projectAnalysisGeneration == generation else { return }
+                model.usageSummary = summary
+                model.processedProjects = Dictionary(summary.projectAnalyses.map { ($0.projectURL, $0) }, uniquingKeysWith: { first, _ in first })
+                model.isAnalyzingProjects = false
+                model.activeProject = nil
+                model.message = L10n.format("app.projects.completed", summary.analyzedProjectCount, summary.pluginUsage.count); model.messageIsError = false; model.messageActionURL = nil
                 Task { await TelemetryClient.shared.capture("logic_project_analysis_completed", properties: ["project_count": TelemetryValue.integer(summary.analyzedProjectCount), "reference_count": TelemetryValue.integer(summary.pluginUsage.count), "unreadable_count": TelemetryValue.integer(summary.unreadableProjectCount)]) }
-                Task { [weak self] in
-                    await self?.notifications.projectAnalysisCompleted(projectCount: summary.analyzedProjectCount, usedPluginCount: summary.pluginUsage.count)
+                Task { @MainActor in
+                    await model.notifications.projectAnalysisCompleted(projectCount: summary.analyzedProjectCount, usedPluginCount: summary.pluginUsage.count)
                 }
             }
         }
@@ -532,6 +533,14 @@ final class AppModel {
         await projectAnalysisTask?.value
         let cache = LogicProjectCache(directory: LogicProjectCache.defaultDirectory)
         try await Task.detached(priority: .utility) { try cache.clear() }.value
+    }
+}
+
+private final class WeakAppModelReference: @unchecked Sendable {
+    weak var value: AppModel?
+
+    init(_ value: AppModel) {
+        self.value = value
     }
 }
 
