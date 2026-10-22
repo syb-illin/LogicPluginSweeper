@@ -29,8 +29,10 @@ public final class AUValidator: @unchecked Sendable {
 
     public func validateAll(timeout: TimeInterval = 30) async -> AUValidationResult {
         let controller = ProcessController()
+        let executable = self.executableURL
+        let arguments = self.arguments
         let processTask = Task.detached(priority: .utility) {
-            self.runProcess(arguments: self.arguments, timeout: timeout, controller: controller)
+            AUValidator(executableURL: executable, arguments: arguments).runProcess(arguments: arguments, timeout: timeout, controller: controller)
         }
         return await withTaskGroup(of: AUValidationResult.self) { group in
             group.addTask { await processTask.value }

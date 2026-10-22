@@ -32,7 +32,7 @@ public struct LogicProjectAnalyzer: Sendable {
         }
         let matcher = MultiPatternMatcher(patterns: patterns)
         let pluginsByKey = Dictionary(plugins.map { (pluginKey($0), $0) }, uniquingKeysWith: { first, _ in first })
-        let pluginsByID = Dictionary(uniqueKeysWithValues: plugins.map { ($0.id, $0) })
+        let pluginsByID = Dictionary(plugins.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let pluginKeys = pluginsWithSignatures.map { plugin, signatures in
             "\(pluginKey(plugin))|\(plugin.name)|\(plugin.version ?? "")|\(signatures.joined(separator: ","))"
         }

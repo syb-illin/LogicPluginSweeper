@@ -22,8 +22,9 @@ public struct UninstallService: Sendable {
 
     public init(supportDirectory: URL? = nil, preferencesURL: URL? = nil, preferencesDomain: String = "com.syb-illin.LogicPluginSweeper") {
         let manager = FileManager.default
-        self.supportDirectory = supportDirectory ?? manager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LogicPluginSweeper", isDirectory: true)
+        let applicationSupport = manager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? manager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        self.supportDirectory = supportDirectory ?? applicationSupport.appendingPathComponent("LogicPluginSweeper", isDirectory: true)
         self.preferencesURL = preferencesURL ?? manager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Preferences/com.syb-illin.LogicPluginSweeper.plist")
         self.preferencesDomain = preferencesDomain

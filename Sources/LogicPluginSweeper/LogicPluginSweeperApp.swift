@@ -140,8 +140,9 @@ final class AppModel {
     init() {
         let bundledVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         Task { await TelemetryClient.shared.capture("app_opened", properties: ["app_version": TelemetryValue.string(bundledVersion)]) }
-        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LogicPluginSweeper/history.sqlite")
-        store = try? SQLiteStore(url: url)
+        if let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            store = try? SQLiteStore(url: applicationSupport.appendingPathComponent("LogicPluginSweeper/history.sqlite"))
+        }
         Task { [weak self] in
             guard let self else { return }
             await self.notifications.prepare()
@@ -449,6 +450,9 @@ final class AppModel {
 
     func analyzeLogicProjects(urls: [URL]) {
         guard !isClearingProjectCache else { return }
+        var seenURLs = Set<URL>()
+        let uniqueURLs = urls.map(\.standardizedFileURL).filter { seenURLs.insert($0).inserted }
+        guard !uniqueURLs.isEmpty else { return }
         projectDiscoveryTask?.cancel()
         projectAnalysisTask?.cancel()
         projectAnalysisGeneration = UUID()
@@ -458,14 +462,16 @@ final class AppModel {
         processedProjects = [:]
         activeProject = nil
         usageSummary = nil
-        selectedProjectSourceLabel = urls.count == 1 ? urls[0].path : L10n.format("app.projects.selected.count", urls.count)
+        selectedProjectSourceLabel = uniqueURLs.count == 1 ? uniqueURLs[0].path : L10n.format("app.projects.selected.count", uniqueURLs.count)
         message = L10n.text("app.projects.discovering"); messageIsError = false; messageActionURL = nil
         let installedPlugins = self.plugins
         let generation = projectAnalysisGeneration
         projectDiscoveryTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let projects = urls.flatMap { url in
+            let projects = uniqueURLs.flatMap { url in
                 if Task.isCancelled { return [URL]() }
                 return url.pathExtension.lowercased() == "logicx" ? [url] : LogicProjectLocator().find(in: url)
+            }.reduce(into: [URL]()) { result, project in
+                if !result.contains(project) { result.append(project) }
             }
             await MainActor.run {
                 guard !Task.isCancelled, let self, self.projectAnalysisGeneration == generation else { return }
@@ -500,7 +506,7 @@ final class AppModel {
             await MainActor.run { [weak self] in
                 guard let self, !Task.isCancelled, self.projectAnalysisGeneration == generation else { return }
                 self.usageSummary = summary
-                self.processedProjects = Dictionary(uniqueKeysWithValues: summary.projectAnalyses.map { ($0.projectURL, $0) })
+                self.processedProjects = Dictionary(summary.projectAnalyses.map { ($0.projectURL, $0) }, uniquingKeysWith: { first, _ in first })
                 self.isAnalyzingProjects = false
                 self.activeProject = nil
                 self.message = L10n.format("app.projects.completed", summary.analyzedProjectCount, summary.pluginUsage.count); self.messageIsError = false; self.messageActionURL = nil
@@ -1155,7 +1161,7 @@ private struct ProjectAnalysisRow: View {
         }
     }
 
-    private var pluginRecords: [UUID: PluginRecord] { Dictionary(uniqueKeysWithValues: plugins.map { ($0.id, $0) }) }
+    private var pluginRecords: [UUID: PluginRecord] { Dictionary(plugins.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) }
 
     private var pluginPills: [PluginPill] {
         let grouped = Dictionary(grouping: analysis?.pluginUsages ?? [], by: \.pluginID)

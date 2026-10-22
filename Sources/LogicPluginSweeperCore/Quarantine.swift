@@ -6,7 +6,9 @@ public struct QuarantineService: Sendable {
     private let privilegedMover = PrivilegedFileMover()
 
     public init(root: URL? = nil) {
-        self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("LogicPluginSweeper/Quarantine", isDirectory: true)
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        self.root = root ?? applicationSupport.appendingPathComponent("LogicPluginSweeper/Quarantine", isDirectory: true)
     }
 
     public func quarantine(_ plugin: PluginRecord) throws -> RemovalRecord {

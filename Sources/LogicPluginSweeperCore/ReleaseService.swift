@@ -20,8 +20,10 @@ public struct SemanticVersion: Comparable, Codable, Hashable, Sendable, CustomSt
         let value = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         let withoutPrefix = value.first == "v" || value.first == "V" ? String(value.dropFirst()) : value
         let parts = withoutPrefix.split(separator: "+", maxSplits: 1, omittingEmptySubsequences: false)
-        let versionAndPrerelease = parts[0].split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
-        let components = versionAndPrerelease[0].split(separator: ".", omittingEmptySubsequences: false)
+        guard let base = parts.first else { return nil }
+        let versionAndPrerelease = base.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        guard let version = versionAndPrerelease.first else { return nil }
+        let components = version.split(separator: ".", omittingEmptySubsequences: false)
         guard components.count == 3,
               components.allSatisfy({ $0.allSatisfy { $0.isNumber } }),
               let major = Int(components[0]), let minor = Int(components[1]), let patch = Int(components[2]) else { return nil }

@@ -45,7 +45,7 @@ actor TelemetryClient {
     }
 
     private let apiKey = "phc_ndRDwaMQNtPh9znNdUoJfBo2Ldrzf4Cr2gZKfRfWC4oz"
-    private let endpoint = URL(string: "https://eu.i.posthog.com/batch/")!
+    private let endpoint = URL(string: "https://eu.i.posthog.com/batch/") ?? URL(fileURLWithPath: "/")
     private let session: URLSession
     private let defaults: UserDefaults
     private var events: [Event] = []

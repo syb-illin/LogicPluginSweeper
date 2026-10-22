@@ -5,8 +5,9 @@ public struct LogicProjectCache: Sendable {
     private let directory: URL
 
     public static var defaultDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LogicPluginSweeper/LogicProjectCache", isDirectory: true)
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return applicationSupport.appendingPathComponent("LogicPluginSweeper/LogicProjectCache", isDirectory: true)
     }
 
     public struct Statistics: Sendable {
